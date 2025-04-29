@@ -1,0 +1,178 @@
+import java.util.Scanner;
+
+public class CrecimientoPapa {
+
+    static double[] x = {20, 25, 30, 40, 50, 60, 70, 80};
+    static double[] y = {3, 13, 21, 35, 60, 68, 82, 88};
+
+    // Interpolación de Lagrange
+    public static double lagrange(double xi) {
+        double result = 0;
+        for (int i = 0; i < x.length; i++) {
+            double term = y[i];
+            for (int j = 0; j < x.length; j++) {
+                if (i != j) {
+                    term *= (xi - x[j]) / (x[i] - x[j]);
+                }
+            }
+            result += term;
+        }
+        return result;
+    }
+
+    // Interpolación de Newton
+    public static double newton(double xi) {
+        int n = x.length;
+        double[][] f = new double[n][n];
+        for (int i = 0; i < n; i++) f[i][0] = y[i];
+
+        for (int j = 1; j < n; j++) {
+            for (int i = 0; i < n - j; i++) {
+                f[i][j] = (f[i + 1][j - 1] - f[i][j - 1]) / (x[i + j] - x[i]);
+            }
+        }
+
+        double result = f[0][0];
+        double term = 1;
+        for (int i = 1; i < n; i++) {
+            term *= (xi - x[i - 1]);
+            result += f[0][i] * term;
+        }
+        return result;
+    }
+
+    // Regresión lineal
+    public static double regresionLineal(double xi) {
+        int n = x.length;
+        double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+
+        for (int i = 0; i < n; i++) {
+            sumX += x[i];
+            sumY += y[i];
+            sumXY += x[i] * y[i];
+            sumX2 += x[i] * x[i];
+        }
+
+        double a = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        double b = (sumY - a * sumX) / n;
+
+        return a * xi + b;
+    }
+
+    // -------- SPLINE CÚBICO --------
+    static class SplineSegment {
+        double a, b, c, d, x;
+
+        public double evaluar(double xi) {
+            double dx = xi - x;
+            return a + b * dx + c * dx * dx + d * dx * dx * dx;
+        }
+    }
+
+    static SplineSegment[] calcularSplines(double[] x, double[] y) {
+        int n = x.length - 1;
+        double[] h = new double[n];
+        for (int i = 0; i < n; i++) h[i] = x[i + 1] - x[i];
+
+        double[] alpha = new double[n];
+        for (int i = 1; i < n; i++) {
+            alpha[i] = (3 / h[i]) * (y[i + 1] - y[i]) - (3 / h[i - 1]) * (y[i] - y[i - 1]);
+        }
+
+        double[] l = new double[n + 1];
+        double[] mu = new double[n + 1];
+        double[] z = new double[n + 1];
+        double[] c = new double[n + 1];
+        double[] b = new double[n];
+        double[] d = new double[n];
+
+        l[0] = 1; mu[0] = 0; z[0] = 0;
+
+        for (int i = 1; i < n; i++) {
+            l[i] = 2 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
+            mu[i] = h[i] / l[i];
+            z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
+        }
+
+        l[n] = 1;
+        z[n] = 0;
+        c[n] = 0;
+
+        for (int j = n - 1; j >= 0; j--) {
+            c[j] = z[j] - mu[j] * c[j + 1];
+            b[j] = (y[j + 1] - y[j]) / h[j] - h[j] * (c[j + 1] + 2 * c[j]) / 3;
+            d[j] = (c[j + 1] - c[j]) / (3 * h[j]);
+        }
+
+        SplineSegment[] splines = new SplineSegment[n];
+        for (int i = 0; i < n; i++) {
+            splines[i] = new SplineSegment();
+            splines[i].x = x[i];
+            splines[i].a = y[i];
+            splines[i].b = b[i];
+            splines[i].c = c[i];
+            splines[i].d = d[i];
+        }
+
+        return splines;
+    }
+
+    static double evaluarSpline(SplineSegment[] splines, double xi) {
+        for (int i = 0; i < splines.length; i++) {
+            if (xi >= splines[i].x && xi <= x[i + 1]) {
+                return splines[i].evaluar(xi);
+            }
+        }
+        return Double.NaN; // fuera del rango
+    }
+
+    // -------- MAIN CON MENÚ --------
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        SplineSegment[] splines = calcularSplines(x, y);
+
+        while (true) {
+            System.out.println("\n--- MÉTODOS DE ESTIMACIÓN DE CRECIMIENTO ---");
+            System.out.println("1. Interpolación de Lagrange");
+            System.out.println("2. Interpolación de Newton");
+            System.out.println("3. Regresión lineal");
+            System.out.println("4. Spline cúbico natural");
+            System.out.println("5. Salir");
+            System.out.print("Seleccione una opción: ");
+            int opcion = scanner.nextInt();
+
+            if (opcion == 5) break;
+
+            System.out.print("Ingrese el día a estimar (20-80): ");
+            double dia = scanner.nextDouble();
+
+            double resultado = 0;
+
+            switch (opcion) {
+                case 1:
+                    resultado = lagrange(dia);
+                    break;
+                case 2:
+                    resultado = newton(dia);
+                    break;
+                case 3:
+                    resultado = regresionLineal(dia);
+                    break;
+                case 4:
+                    resultado = evaluarSpline(splines, dia);
+                    break;
+                default:
+                    System.out.println("Opción no válida");
+                    continue;
+            }
+
+            if (Double.isNaN(resultado)) {
+                System.out.println("⚠️ Día fuera del rango de datos.");
+            } else {
+                System.out.printf("🌱 Altura estimada para día %.1f: %.2f cm%n", dia, resultado);
+            }
+        }
+
+        scanner.close();
+    }
+}
